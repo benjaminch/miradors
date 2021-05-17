@@ -1,0 +1,15 @@
+---
+application:
+  name: "miradors"
+  project: "miradors"
+  organization: "QoveryCommunity"
+databases:
+- type: "POSTGRESQL"
+  name: "miradors-db"
+  version: "12"
+routers:
+- name: "main-miradors"
+  routes:
+  - application_name: "miradors"
+    paths:
+    - "/*"
