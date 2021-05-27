@@ -9,15 +9,18 @@ struct Config {
     websites_to_check: String,
 }
 
-fn check_websites() -> Result<(), Box<dyn Error>> {
-    // config is pulled everytime so websites to check can be changed without restarting the app
-    let config_result = envy::prefixed("MIRADOR_").from_env::<Config>();
+fn get_config() -> Result<Config, Box<dyn Error>> {
+    let config_result = envy::prefixed("MIRADORS_").from_env::<Config>();
     if let Err(err) = config_result {
         return Err(Box::new(err));
     }
 
-    let config = config_result.unwrap();
-    println!("{:#?}", config);
+    Ok(config_result.unwrap())
+}
+
+fn check_websites() -> Result<(), Box<dyn Error>> {
+    // config is pulled everytime so websites to check can be changed without restarting the app
+	let config = get_config()?;
 
     let http_client = reqwest::blocking::Client::new();
     let websites_to_check: Vec<&str> = config.websites_to_check.split(' ').collect();
