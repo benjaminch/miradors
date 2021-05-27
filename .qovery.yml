@@ -3,6 +3,7 @@ application:
   name: "miradors"
   project: "miradors"
   organization: "QoveryCommunity"
+  publicly_accessible: false
 databases:
 - type: "POSTGRESQL"
   name: "miradors-db"
