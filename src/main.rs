@@ -52,7 +52,7 @@ fn check_websites() -> Result<(), Box<dyn Error>> {
 
 fn main() {
     let mut scheduler = Scheduler::new();
-    scheduler.every(10.seconds()).run(|| {
+    scheduler.every(10.minutes()).run(|| {
         match check_websites() {
             Ok(_) => println!("All good!"),
             Err(err) => eprintln!("Error: {}", err),
