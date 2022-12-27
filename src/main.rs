@@ -1,17 +1,22 @@
-use clokwerk::{Scheduler, TimeUnits};
 use mailgun_rs::{EmailAddress, Mailgun, Message};
 use serde::Deserialize;
 use serde_with::with_prefix;
 use std::collections::HashMap;
+use std::env;
 use std::error::Error;
+use std::fs::File;
+use std::io::BufReader;
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::{error, info, Level};
+use tracing_subscriber::FmtSubscriber;
 
 with_prefix!(email_service "email_service_");
 
 #[derive(Deserialize, Debug)]
 struct Config {
     websites_to_check: String,
+    check_interval_in_seconds: u64,
     #[serde(flatten, with = "email_service")]
     email_service_config: EmailServiceConfig,
 }
@@ -26,6 +31,18 @@ struct EmailServiceConfig {
 }
 
 fn get_config() -> Result<Config, Box<dyn Error>> {
+    // try to load config from file
+    if let Ok(config_file_path) = env::var("MIRADORS_CONFIG_FILE") {
+        let file = File::open(config_file_path).map_err(Box::new)?;
+        let reader = BufReader::new(file);
+
+        // config has been loaded from file, ignoring env vars
+        let config: Config = serde_json::from_reader(reader)?;
+
+        return Ok(config);
+    }
+
+    // config file was not set, try to load configuration from env
     let config_result = envy::prefixed("MIRADORS_").from_env::<Config>();
     if let Err(err) = config_result {
         return Err(Box::new(err));
@@ -43,23 +60,23 @@ fn report_issue(
         to: vec![EmailAddress::address(&email_service_config.recipient_email)],
         subject: String::from("Miradors: Some monitored websites are not reachable!"),
         html: errored_websites
-			.keys()
-			.map(|s| &**s)
-			.collect::<Vec<_>>()
-			.join("<br/>"),
+            .keys()
+            .map(|s| &**s)
+            .collect::<Vec<_>>()
+            .join("<br/>"),
         ..Default::default()
     };
 
     let client = Mailgun {
-        api_key: String::from(email_service_config.api_key),
-        domain: String::from(email_service_config.domain),
-        message: message,
+        api_key: email_service_config.api_key,
+        domain: email_service_config.domain,
+        message,
     };
 
     let sender = EmailAddress::name_address(
-		email_service_config.sender_displayed_name.as_str(),
-		email_service_config.sender_email.as_str(),
-	);
+        email_service_config.sender_displayed_name.as_str(),
+        email_service_config.sender_email.as_str(),
+    );
 
     match client.send(&sender) {
         Ok(_) => Ok(()),
@@ -67,15 +84,11 @@ fn report_issue(
     }
 }
 
-fn check_websites() -> Result<(), Box<dyn Error>> {
+fn check_websites(websites_to_check: Vec<String>) -> Result<(), Box<dyn Error>> {
     // config is pulled everytime so websites to check can be changed without restarting the app
     let config = get_config()?;
 
     let http_client = reqwest::blocking::Client::new();
-    let websites_to_check: Vec<String> = config.websites_to_check
-		.split(' ')
-		.map(|s| s.to_string())
-		.collect();
     let mut errored_websites: HashMap<String, String> = HashMap::new();
 
     for website in websites_to_check.iter() {
@@ -84,37 +97,52 @@ fn check_websites() -> Result<(), Box<dyn Error>> {
         let http_response = http_request.send();
         let duration = start.elapsed();
 
-        println!("{}: [TIME] {:?}", website, duration);
+        info!("{}: [TIME] {:?}", website, duration);
 
         match http_response {
             Ok(_response) => {
-                println!("{}: [OK]", website);
+                info!("{}: [OK]", website);
             }
             Err(err) => {
-                eprintln!("{}: [ERROR] '{}'", website, err);
+                error!("{}: [ERROR] '{}'", website, err);
                 errored_websites.insert(website.to_string(), err.to_string());
             }
         }
     }
 
-    if errored_websites.len() > 0 {
+    if !errored_websites.is_empty() {
         return report_issue(config.email_service_config, &errored_websites);
     }
 
     Ok(())
 }
 
-fn main() {
-    let mut scheduler = Scheduler::new();
-    scheduler.every(10.minutes()).run(|| {
-        match check_websites() {
-            Ok(_) => println!("All good!"),
-            Err(err) => eprintln!("Error: {}", err),
-        };
-    });
+fn main() -> Result<(), Box<dyn Error>> {
+    // init logger
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+
+    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     loop {
-        scheduler.run_pending();
-        thread::sleep(Duration::from_millis(100));
+        // load config everytime to be sure to have fresh config in case of changes
+        // allowing not to restart app in case of config changes
+        let config = get_config()?;
+
+        match check_websites(
+            config
+                .websites_to_check
+                .split(' ')
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>(),
+        ) {
+            Ok(_) => info!("All good!"),
+            Err(err) => error!("Error: {}", err),
+        };
+
+        thread::sleep(Duration::from_secs(config.check_interval_in_seconds));
     }
+
+    Ok(())
 }
