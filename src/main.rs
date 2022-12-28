@@ -117,7 +117,7 @@ fn check_websites(websites_to_check: Vec<String>) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     // init logger
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::INFO)
@@ -128,7 +128,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         // load config everytime to be sure to have fresh config in case of changes
         // allowing not to restart app in case of config changes
-        let config = get_config()?;
+        let config = match get_config() {
+            Ok(c) => c,
+            Err(e) => {
+                error!("Error getting configuration: {}", e);
+                return;
+            }
+        };
 
         match check_websites(
             config
@@ -143,6 +149,4 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         thread::sleep(Duration::from_secs(config.check_interval_in_seconds));
     }
-
-    Ok(())
 }
