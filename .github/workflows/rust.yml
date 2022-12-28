@@ -1,10 +1,10 @@
-name: Rust
+name: rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +16,19 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+
+    - name: Format
+      run: cargo fmt --verbose
+
+    - name: Clippy
+      run: cargo clippy --all-features --tests -- -D warnings -W clippy::cargo -A clippy::cargo-common-metadata
+
+
     - name: Build
       run: cargo build --verbose
+
     - name: Run tests
       run: cargo test --verbose
