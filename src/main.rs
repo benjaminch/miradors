@@ -1,6 +1,5 @@
 use mailgun_rs::{EmailAddress, Mailgun, Message};
 use serde::Deserialize;
-use serde_with::with_prefix;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -11,13 +10,10 @@ use std::time::{Duration, Instant};
 use tracing::{error, info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-with_prefix!(email_service "email_service_");
-
 #[derive(Deserialize, Debug)]
 struct Config {
     websites_to_check: String,
     check_interval_in_seconds: u64,
-    #[serde(flatten, with = "email_service")]
     email_service_config: EmailServiceConfig,
 }
 
@@ -43,12 +39,17 @@ fn get_config() -> Result<Config, Box<dyn Error>> {
     }
 
     // config file was not set, try to load configuration from env
-    let config_result = envy::prefixed("MIRADORS_").from_env::<Config>();
-    if let Err(err) = config_result {
-        return Err(Box::new(err));
-    }
-
-    Ok(config_result.unwrap())
+    Ok(Config {
+        websites_to_check: env::var("MIRADORS_WEBSITES_TO_CHECK")?,
+        check_interval_in_seconds: env::var("MIRADORS_CHECK_INTERVAL_IN_SECONDS")?.parse::<u64>()?,
+        email_service_config: EmailServiceConfig {
+            sender_email: env::var("MIRADORS_EMAIL_SERVICE_SENDER_EMAIL")?,
+            sender_displayed_name: env::var("MIRADORS_EMAIL_SERVICE_SENDER_DISPLAYED_NAME")?,
+            domain: env::var("MIRADORS_EMAIL_SERVICE_DOMAIN")?,
+            api_key: env::var("MIRADORS_EMAIL_SERVICE_API_KEY")?,
+            recipient_email: env::var("MIRADORS_EMAIL_SERVICE_RECIPIENT_EMAIL")?,
+        },
+    })
 }
 
 fn report_issue(
@@ -87,7 +88,6 @@ fn report_issue(
 fn check_websites(websites_to_check: Vec<String>) -> Result<(), Box<dyn Error>> {
     // config is pulled everytime so websites to check can be changed without restarting the app
     let config = get_config()?;
-
     let http_client = reqwest::blocking::Client::new();
     let mut errored_websites: HashMap<String, String> = HashMap::new();
 

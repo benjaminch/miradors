@@ -24,7 +24,7 @@ jobs:
       run: cargo fmt --verbose
 
     - name: Clippy
-      run: cargo clippy --all-features --tests -- -D warnings -W clippy::cargo -A clippy::cargo-common-metadata
+      run: cargo clippy --all-features --tests -- -D warnings -W clippy::cargo -A clippy::multiple-crate-versions
 
 
     - name: Build
