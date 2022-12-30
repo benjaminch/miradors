@@ -66,4 +66,43 @@ $ MIRADORS_CONFIG_FILE=config.json cargo run
 
 # Using Docker image
 ## Via ENV
+```
+docker run \
+    -e MIRADORS_CHECK_INTERVAL_IN_SECONDS=30 \
+    -e MIRADORS_WEBSITES_TO_CHECK="https://google.com https://google.fr" \
+    -e MIRADORS_EMAIL_SERVICE_SENDER_EMAIL=miradors@example.sh \
+    -e MIRADORS_EMAIL_SERVICE_SENDER_DISPLAYED_NAME=Miradors \
+    -e MIRADORS_EMAIL_SERVICE_DOMAIN=example.sh \
+    -e MIRADORS_EMAIL_SERVICE_API_KEY=[MAILGUN_API_KEY] \
+    -e MIRADORS_EMAIL_SERVICE_RECIPIENT_EMAIL=your-email@one.com \
+    ghcr.io/benjaminch/miradors:latest
+2022-12-30T00:06:00.856993Z  INFO miradors: https://google.com: [TIME] 132.636935ms
+2022-12-30T00:06:00.857234Z  INFO miradors: https://google.com: [OK]
+2022-12-30T00:06:00.984119Z  INFO miradors: https://google.fr: [TIME] 125.824959ms
+2022-12-30T00:06:00.984191Z  INFO miradors: https://google.fr: [OK]
+2022-12-30T00:06:00.986428Z  INFO miradors: All good!
+```
+
 ## Via config file
+```
+$ cat config.json
+{
+     "check_interval_in_seconds": 30,
+     "websites_to_check": "https://google.com",
+     "email_service_config": {
+         "sender_email": "miradors@example.sh",
+         "sender_displayed_name": "Miradors",
+         "domain": "example.sh",
+         "api_key": "[MAILGUN_API_KEY]",
+         "recipient_email": "your-email@one.com"
+     }
+}
+
+$ docker run \
+    -v $(pwd)/config.json:/config.json \
+    --env MIRADORS_CONFIG_FILE=config.json \
+    ghcr.io/benjaminch/miradors:latest
+2022-12-30T10:00:34.395011Z  INFO miradors: https://google.com: [TIME] 1.258705674s
+2022-12-30T10:00:34.395183Z  INFO miradors: https://google.com: [OK]
+2022-12-30T10:00:34.396929Z  INFO miradors: All good!
+```
